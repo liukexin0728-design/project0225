@@ -51,15 +51,22 @@ jobs:
           New-Item -Path ${{ runner.temp }}\scanner -ItemType Directory
           dotnet tool update dotnet-sonarscanner --tool-path ${{ runner.temp }}\scanner
 
-      # 步骤6：构建项目并执行 SonarQube 扫描（核心步骤）
+      # 步骤6：构建项目并执行 SonarQube 扫描（核心步骤，已修复参数错误）
       - name: Build and analyze
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         shell: powershell
         run: |
-          # 开始扫描：匹配 SonarCloud 的项目 Key（project0225）和组织 Key
-          ${{ runner.temp }}\scanner\dotnet-sonarscanner begin /k:"liukexin0728-design_project0225" /o:"liukexin0728-design" /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
-          # 构建 .NET 项目（必须成功构建才能扫描）
-          dotnet build
-          # 结束扫描：上传结果到 SonarCloud
-          ${{ runner.temp }}\scanner\dotnet-sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+          # 核心修复：将 sonar.token 改为 sonar.login（新版 SonarScanner 标准参数）
+          ${{ runner.temp }}\scanner\dotnet-sonarscanner begin `
+            /k:"liukexin0728-design_project0225" `
+            /o:"liukexin0728-design" `
+            /d:sonar.login="${{ secrets.SONAR_TOKEN }}" `
+            /d:sonar.host.url="https://sonarcloud.io"
+          
+          # 构建 .NET 项目（添加 Release 模式，扫描结果更准确）
+          dotnet build --configuration Release
+          
+          # 结束扫描并上传结果（同样使用 sonar.login）
+          ${{ runner.temp }}\scanner\dotnet-sonarscanner end `
+            /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
