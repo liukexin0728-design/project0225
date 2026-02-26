@@ -1,29 +1,40 @@
+# 工作流名称（统一为 SonarQube，和你仓库中识别的名称一致）
 name: SonarQube
+
+# 触发条件：适配 GitHub 仓库的 main 分支
 on:
   push:
-    branches:
-      - master
+    branches: [ main ]  # 推送代码到 main 分支时触发
   pull_request:
     types: [opened, synchronize, reopened]
+    branches: [ main ]  # 提交 PR 到 main 分支时触发
+
 jobs:
   build:
     name: Build and analyze
-    runs-on: windows-latest
+    runs-on: windows-latest  # 使用 Windows 环境（适配 .NET 项目）
     steps:
+      # 步骤1：配置 JDK 17（SonarQube 扫描依赖）
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: 17
-          distribution: 'zulu' # Alternative distribution options are available.
+          distribution: 'zulu'
+
+      # 步骤2：拉取代码（禁用浅克隆，保证扫描准确性）
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
+          fetch-depth: 0
+
+      # 步骤3：缓存 SonarQube 包（加速后续扫描）
       - name: Cache SonarQube Cloud packages
         uses: actions/cache@v4
         with:
           path: ~\sonar\cache
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
+
+      # 步骤4：缓存 SonarQube 扫描器（避免重复下载）
       - name: Cache SonarQube Cloud scanner
         id: cache-sonar-scanner
         uses: actions/cache@v4
@@ -31,17 +42,24 @@ jobs:
           path: ${{ runner.temp }}\scanner
           key: ${{ runner.os }}-sonar-scanner
           restore-keys: ${{ runner.os }}-sonar-scanner
+
+      # 步骤5：安装 SonarQube 扫描器（未缓存时才安装）
       - name: Install SonarQube Cloud scanner
         if: steps.cache-sonar-scanner.outputs.cache-hit != 'true'
         shell: powershell
         run: |
           New-Item -Path ${{ runner.temp }}\scanner -ItemType Directory
           dotnet tool update dotnet-sonarscanner --tool-path ${{ runner.temp }}\scanner
+
+      # 步骤6：构建项目并执行 SonarQube 扫描（核心步骤）
       - name: Build and analyze
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         shell: powershell
         run: |
+          # 开始扫描：匹配 SonarCloud 的项目 Key（project0225）和组织 Key
           ${{ runner.temp }}\scanner\dotnet-sonarscanner begin /k:"liukexin0728-design_project0225" /o:"liukexin0728-design" /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+          # 构建 .NET 项目（必须成功构建才能扫描）
           dotnet build
+          # 结束扫描：上传结果到 SonarCloud
           ${{ runner.temp }}\scanner\dotnet-sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
